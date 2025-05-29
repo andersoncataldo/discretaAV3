@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Verificador de Placas e Estacionamento</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    form {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    label {
+      display: block;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button {
+      background-color: #007bff;
+      color: #fff;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    pre {
+      margin-top: 20px;
+      background-color: #e9ecef;
+      padding: 15px;
+      border-radius: 6px;
+      width: 100%;
+      max-width: 400px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>Verificador de Placas e Cálculo de Estacionamento</h1>
+
+  <form id="formulario">
+    <label>Placa Mercosul:
+      <input type="text" id="placa" placeholder="Ex: ABC1D23" required>
+    </label>
+    <label>Hora Entrada (HH:MM):
+      <input type="text" id="entrada" placeholder="Ex: 08:00" required>
+    </label>
+    <label>Hora Saída (HH:MM):
+      <input type="text" id="saida" placeholder="Ex: 12:30" required>
+    </label>
+    <label>Matrículas (separadas por vírgula):
+      <input type="text" id="matriculas" placeholder="Ex: 241049/2,241721/3" required>
+    </label>
+    <button type="submit">Verificar</button>
+  </form>
+
+  <pre id="resultado"></pre>
+
+  <script>
+// [todo JS permanece igual, sem alteração de lógica, preservando funcionalidade existente]
+const estados = {
+  "DF (Distrito Federal)": [["JDP", "JKR"], ["OVM", "OVV"], ["OZM", "PBZ"], ["REC", "REV"]],
+  "GO (Goiás)": [["KAV", "KFC"], ["NFC", "NGZ"], ["NJX", "NLU"], ["NVO", "NWR"], ["OGH", "OHA"], ["OMI", "OOF"], ["PQA", "PRZ"], ["QTN", "QTS"], ["RBK", "RCN"], ["SBW", "SDS"]],
+  "MG (Minas Gerais)": [["GKJ", "HOK"], ["NXX", "NYG"], ["OLO", "OMH"], ["OOV", "ORC"], ["OWH", "OXK"], ["PUA", "PZZ"], ["QMQ", "QQZ"], ["QUA", "QUZ"], ["QWR", "QXZ"], ["RFA", "RGD"], ["RMD", "RNZ"], ["RTA", "RVZ"]]
+};
+function compararPlaca(p1, p2) { return p1.localeCompare(p2); }
+function pertenceAoEstado(prefixo) {
+  for (const [estado, faixas] of Object.entries(estados)) {
+    for (const [inicio, fim] of faixas) {
+      if (compararPlaca(prefixo, inicio) >= 0 && compararPlaca(prefixo, fim) <= 0) return estado;
+    }
+  }
+  return null;
+}
+function identificarEstado(placa) {
+  const prefixo = placa.slice(0, 3).toUpperCase();
+  const estado = pertenceAoEstado(prefixo);
+  return estado ? `Placa ${placa} pertence ao estado: ${estado}` : `Placa ${placa} não pertence a MG, DF ou GO.`;
+}
+function calcularM(matriculas) {
+  let soma = 0;
+  for (const mat of matriculas) {
+    if (!mat.includes("/")) throw new Error(`Matrícula inválida: ${mat}. Use o formato 000000/0.`);
+    const match = mat.match(/(\d+)\/(\d)/);
+    if (match) {
+      const corpo = match[1];
+      const digitoAntesBarra = parseInt(corpo.charAt(corpo.length - 1));
+      soma += digitoAntesBarra;
+    }
+  }
+  return soma / 100;
+}
+function validarHora(hora) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
+}
+function calcularValorEstacionamento(horaEntrada, horaSaida, m) {
+  if (!validarHora(horaEntrada)) throw new Error("Hora de entrada inválida. Use o formato HH:MM (ex: 08:30).");
+  if (!validarHora(horaSaida)) throw new Error("Hora de saída inválida. Use o formato HH:MM (ex: 18:45).");
+  const entrada = new Date(`2023-01-01T${horaEntrada}:00`);
+  const saida = new Date(`2023-01-01T${horaSaida}:00`);
+  if (saida <= entrada) throw new Error("A hora de saída deve ser depois da hora de entrada.");
+  const diff = (saida - entrada) / 60000;
+  if (diff <= 15) return 0;
+  if (diff <= 180) return 10;
+  const extra = diff - 180;
+  return 10 + Math.ceil(extra / 20) * (2 + m);
+}
+formulario.addEventListener("submit", function(e) {
+  e.preventDefault();
+  const placa = document.getElementById("placa").value.trim();
+  const entrada = document.getElementById("entrada").value.trim();
+  const saida = document.getElementById("saida").value.trim();
+  const matriculas = document.getElementById("matriculas").value.split(",").map(m => m.trim());
+  try {
+    const estadoMsg = identificarEstado(placa);
+    const m = calcularM(matriculas);
+    const valor = calcularValorEstacionamento(entrada, saida, m);
+    resultado.textContent = `${estadoMsg}\nValor a pagar: R$ ${valor.toFixed(2)}`;
+  } catch (err) {
+    resultado.textContent = `Erro: ${err.message}`;
+  }
+});
+  </script>
+</body>
+</html>
